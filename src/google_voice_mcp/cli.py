@@ -9,7 +9,10 @@ from rich.table import Table
 from google_voice_mcp.client import GoogleVoiceClient
 from google_voice_mcp.server import create_server
 
-app = typer.Typer(help="Google Voice CLI and MCP Server")
+app = typer.Typer(
+    help="Google Voice CLI and MCP Server",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 console = Console()
 
 
@@ -17,7 +20,7 @@ console = Console()
 def sms(
     limit: int = typer.Option(10, "--limit", "-l", help="Number of messages to list"),
     unread: bool = typer.Option(False, "--unread", "-u", help="Show unread messages only"),
-    as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ):
     """List recent SMS messages."""
     client = GoogleVoiceClient()
@@ -59,7 +62,7 @@ def send(
 @app.command()
 def calls(
     limit: int = typer.Option(10, "--limit", "-l", help="Number of calls to list"),
-    as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ):
     """List recent call history."""
     client = GoogleVoiceClient()
@@ -89,7 +92,7 @@ def calls(
 @app.command()
 def voicemails(
     limit: int = typer.Option(10, "--limit", "-l", help="Number of voicemails to list"),
-    as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ):
     """List voicemails and transcripts."""
     client = GoogleVoiceClient()
