@@ -1,138 +1,57 @@
-"""MCP Server implementation for Google Voice."""
+"""MCP tools served by the SDK's standard stdio transport."""
 
-import asyncio
-from typing import Any, Sequence
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import (
-    Tool,
-    TextContent,
-    EmbeddedResource,
-)
+from typing import Any
+
+from mcp.server.fastmcp import FastMCP
+from pydantic import StrictBool, StrictInt, StrictStr
 
 from google_voice_mcp.client import GoogleVoiceClient
 
 
-def create_server() -> Server:
-    app = Server("google-voice-mcp")
-    client = GoogleVoiceClient()
+def create_server(client=None) -> FastMCP:
+    server = FastMCP("google-voice-mcp")
+    voice = client if client is not None else GoogleVoiceClient()
 
-    @app.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="list_sms",
-                description="List recent SMS text messages from Google Voice",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {
-                            "type": "integer",
-                            "description": "Number of messages to retrieve (default: 10)",
-                            "default": 10,
-                        },
-                        "unread_only": {
-                            "type": "boolean",
-                            "description": "Filter for unread messages only",
-                            "default": False,
-                        },
-                    },
-                },
-            ),
-            Tool(
-                name="send_sms",
-                description="Send an SMS message to a phone number via Google Voice",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "to": {
-                            "type": "string",
-                            "description": "Recipient phone number (e.g. +16262344927)",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Text body of the SMS",
-                        },
-                    },
-                    "required": ["to", "message"],
-                },
-            ),
-            Tool(
-                name="list_calls",
-                description="List incoming, outgoing, and missed call history from Google Voice",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {
-                            "type": "integer",
-                            "description": "Number of call logs to retrieve (default: 10)",
-                            "default": 10,
-                        },
-                    },
-                },
-            ),
-            Tool(
-                name="list_voicemails",
-                description="List voicemails along with transcription text",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {
-                            "type": "integer",
-                            "description": "Number of voicemails to retrieve (default: 10)",
-                            "default": 10,
-                        },
-                    },
-                },
-            ),
-        ]
+    @server.tool()
+    def doctor() -> dict[str, Any]:
+        """Inspect Chrome and the selected Voice account without reading history."""
+        return voice.doctor()
 
-    @app.call_tool()
-    async def call_tool(name: str, arguments: Any) -> Sequence[TextContent]:
-        args = arguments or {}
+    @server.tool()
+    def list_sms(limit: StrictInt = 10, unread_only: StrictBool = False) -> dict[str, Any]:
+        """Read bounded visible SMS summaries; requires configured expected account."""
+        return voice.list_sms(limit=limit, unread_only=unread_only)
 
-        if name == "list_sms":
-            limit = args.get("limit", 10)
-            unread_only = args.get("unread_only", False)
-            msgs = client.list_sms(limit=limit, unread_only=unread_only)
-            result = [m.model_dump(mode="json") for m in msgs]
-            import json
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    @server.tool()
+    def list_calls(limit: StrictInt = 10) -> dict[str, Any]:
+        """Read bounded visible call history in the selected tab."""
+        return voice.list_calls(limit=limit)
 
-        elif name == "send_sms":
-            to = args["to"]
-            message = args["message"]
-            msg = client.send_sms(recipient=to, text=message)
-            import json
-            return [TextContent(type="text", text=json.dumps(msg.model_dump(mode="json"), indent=2))]
+    @server.tool()
+    def list_voicemails(limit: StrictInt = 10) -> dict[str, Any]:
+        """Read bounded visible voicemail summaries in the selected tab."""
+        return voice.list_voicemails(limit=limit)
 
-        elif name == "list_calls":
-            limit = args.get("limit", 10)
-            calls = client.list_calls(limit=limit)
-            result = [c.model_dump(mode="json") for c in calls]
-            import json
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    @server.tool()
+    def read_thread(limit: StrictInt = 20) -> dict[str, Any]:
+        """Read bounded messages from the currently selected conversation."""
+        return voice.read_thread(limit=limit)
 
-        elif name == "list_voicemails":
-            limit = args.get("limit", 10)
-            vms = client.list_voicemails(limit=limit)
-            result = [v.model_dump(mode="json") for v in vms]
-            import json
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    @server.tool()
+    def send_sms(to: StrictStr, message: StrictStr, confirm: StrictBool = False) -> dict[str, Any]:
+        """Preview locally. Set confirm=true only after user approves exact recipient and text.
 
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+        Execution requires configured expected account and the matching selected one-to-one
+        thread with no existing draft. Never retry an outcome_unknown result.
+        """
+        return voice.send_sms(recipient=to, text=message, confirm=confirm)
 
-    def run():
-        async def main():
-            async with stdio_server() as (read_stream, write_stream):
-                await app.run(
-                    read_stream,
-                    write_stream,
-                    app.create_initialization_options(),
-                )
+    return server
 
-        asyncio.run(main())
 
-    app.run = run
-    return app
+def main():
+    create_server().run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

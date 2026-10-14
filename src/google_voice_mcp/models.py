@@ -1,42 +1,24 @@
-"""Core models for Google Voice operations."""
+"""Strict validation shared by public interfaces; no synthetic records."""
 
-from datetime import datetime
-from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
+import re
 
-
-class CallType(str, Enum):
-    INCOMING = "incoming"
-    OUTGOING = "outgoing"
-    MISSED = "missed"
-    VOICEMAIL = "voicemail"
+from google_voice_mcp.browser import VoiceError
 
 
-class SMSMessage(BaseModel):
-    id: str
-    sender: str
-    recipient: str
-    text: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    is_read: bool = True
-    direction: str = "incoming"  # incoming or outgoing
+def integer(value: int, name: str, maximum: int) -> int:
+    if type(value) is not int or not 1 <= value <= maximum:
+        raise VoiceError(f"{name} must be an integer from 1 to {maximum}")
+    return value
 
 
-class CallRecord(BaseModel):
-    id: str
-    phone_number: str
-    call_type: CallType
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    duration_seconds: int = 0
-    transcript: Optional[str] = None
+def boolean(value: bool, name: str) -> bool:
+    if type(value) is not bool:
+        raise VoiceError(f"{name} must be a boolean")
+    return value
 
 
-class Voicemail(BaseModel):
-    id: str
-    sender: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    duration_seconds: int
-    transcript: Optional[str] = None
-    audio_url: Optional[str] = None
-    is_read: bool = False
+def message(recipient: str, text: str) -> None:
+    if not isinstance(recipient, str) or re.fullmatch(r"\+[1-9][0-9]{7,14}", recipient) is None:
+        raise VoiceError("recipient must be an international phone number, e.g. +12025550123")
+    if not isinstance(text, str) or not text.strip() or len(text) > 1600:
+        raise VoiceError("text must contain 1 to 1600 characters and not be blank")

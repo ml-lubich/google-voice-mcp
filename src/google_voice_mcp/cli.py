@@ -1,129 +1,97 @@
-"""CLI interface for google-voice-mcp."""
+"""Google Voice CLI. All output is JSON, including operational errors."""
 
 import json
-from typing import Optional
-import typer
-from rich.console import Console
-from rich.table import Table
 
+from typer._click.exceptions import ClickException
+import typer
+from typer.core import TyperGroup
+
+from google_voice_mcp.browser import VoiceError
 from google_voice_mcp.client import GoogleVoiceClient
 from google_voice_mcp.server import create_server
 
-app = typer.Typer(
-    help="Google Voice CLI and MCP Server",
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
-console = Console()
+
+class JsonGroup(TyperGroup):
+    def main(self, *args, **kwargs):
+        try:
+            return super().main(*args, **{**kwargs, "standalone_mode": False})
+        except ClickException as error:
+            typer.echo(json.dumps({"error": error.format_message()}))
+            raise SystemExit(error.exit_code) from None
+
+
+app = typer.Typer(cls=JsonGroup, help="Google Voice through existing Chrome. Output is JSON.",
+                  context_settings={"help_option_names": ["-h", "--help"]})
+
+
+@app.callback()
+def configure(ctx: typer.Context,
+              account: str | None = typer.Option(None, "--account", help="Expected account email (or GOOGLE_VOICE_ACCOUNT)"),
+              port: int | None = typer.Option(None, "--port", help="Chrome CDP port (or GOOGLE_VOICE_PORT)"),
+              tab_id: str | None = typer.Option(None, "--tab-id", help="Exact Chrome tab ID (or GOOGLE_VOICE_TAB_ID)"),
+              as_json: bool = typer.Option(False, "--json", "-j", help="JSON output (always enabled)")):
+    ctx.obj = {"account_email": account, "port": port, "tab_id": tab_id}
+
+
+def _run(ctx, operation, **kwargs):
+    try:
+        result = getattr(GoogleVoiceClient(**ctx.obj), operation)(**kwargs)
+    except VoiceError as error:
+        raise ClickException(str(error)) from None
+    typer.echo(json.dumps(result, ensure_ascii=False))
 
 
 @app.command()
-def sms(
-    limit: int = typer.Option(10, "--limit", "-l", help="Number of messages to list"),
-    unread: bool = typer.Option(False, "--unread", "-u", help="Show unread messages only"),
-    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-):
-    """List recent SMS messages."""
-    client = GoogleVoiceClient()
-    messages = client.list_sms(limit=limit, unread_only=unread)
-    if as_json:
-        console.print_json(data=[m.model_dump(mode="json") for m in messages])
-        return
-
-    table = Table(title="Google Voice — SMS Messages")
-    table.add_column("ID", style="dim")
-    table.add_column("Direction", style="cyan")
-    table.add_column("Contact", style="green")
-    table.add_column("Message", style="white")
-    table.add_column("Time", style="magenta")
-
-    for m in messages:
-        contact = m.recipient if m.direction == "outgoing" else m.sender
-        table.add_row(
-            m.id,
-            m.direction.upper(),
-            contact,
-            m.text,
-            m.timestamp.strftime("%Y-%m-%d %H:%M"),
-        )
-    console.print(table)
+def doctor(ctx: typer.Context, as_json: bool = typer.Option(False, "--json", "-j")):
+    """Inspect browser connection and account identity."""
+    _run(ctx, "doctor")
 
 
 @app.command()
-def send(
-    to: str = typer.Argument(..., help="Recipient phone number"),
-    message: str = typer.Argument(..., help="SMS message text"),
-):
-    """Send an SMS message."""
-    client = GoogleVoiceClient()
-    msg = client.send_sms(recipient=to, text=message)
-    console.print(f"[green]✓ Sent SMS to {to}:[/green] {message} (id: {msg.id})")
+def sms(ctx: typer.Context, limit: int = typer.Option(10, "--limit", "-l"),
+        unread: bool = typer.Option(False, "--unread", "-u"),
+        as_json: bool = typer.Option(False, "--json", "-j")):
+    """List bounded visible SMS summaries."""
+    _run(ctx, "list_sms", limit=limit, unread_only=unread)
 
 
 @app.command()
-def calls(
-    limit: int = typer.Option(10, "--limit", "-l", help="Number of calls to list"),
-    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-):
-    """List recent call history."""
-    client = GoogleVoiceClient()
-    call_records = client.list_calls(limit=limit)
-    if as_json:
-        console.print_json(data=[c.model_dump(mode="json") for c in call_records])
-        return
-
-    table = Table(title="Google Voice — Call History")
-    table.add_column("ID", style="dim")
-    table.add_column("Type", style="cyan")
-    table.add_column("Number", style="green")
-    table.add_column("Duration", style="yellow")
-    table.add_column("Time", style="magenta")
-
-    for c in call_records:
-        table.add_row(
-            c.id,
-            c.call_type.value.upper(),
-            c.phone_number,
-            f"{c.duration_seconds}s",
-            c.timestamp.strftime("%Y-%m-%d %H:%M"),
-        )
-    console.print(table)
+def calls(ctx: typer.Context, limit: int = typer.Option(10, "--limit", "-l"),
+          as_json: bool = typer.Option(False, "--json", "-j")):
+    """List bounded visible call history."""
+    _run(ctx, "list_calls", limit=limit)
 
 
 @app.command()
-def voicemails(
-    limit: int = typer.Option(10, "--limit", "-l", help="Number of voicemails to list"),
-    as_json: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-):
-    """List voicemails and transcripts."""
-    client = GoogleVoiceClient()
-    vms = client.list_voicemails(limit=limit)
-    if as_json:
-        console.print_json(data=[v.model_dump(mode="json") for v in vms])
-        return
-
-    table = Table(title="Google Voice — Voicemails")
-    table.add_column("ID", style="dim")
-    table.add_column("From", style="green")
-    table.add_column("Transcript", style="white")
-    table.add_column("Duration", style="yellow")
-    table.add_column("Time", style="magenta")
-
-    for v in vms:
-        table.add_row(
-            v.id,
-            v.sender,
-            v.transcript or "(No transcript)",
-            f"{v.duration_seconds}s",
-            v.timestamp.strftime("%Y-%m-%d %H:%M"),
-        )
-    console.print(table)
+def voicemails(ctx: typer.Context, limit: int = typer.Option(10, "--limit", "-l"),
+              as_json: bool = typer.Option(False, "--json", "-j")):
+    """List bounded visible voicemail summaries."""
+    _run(ctx, "list_voicemails", limit=limit)
 
 
 @app.command()
-def serve():
-    """Start the Model Context Protocol (MCP) server over stdio."""
-    server = create_server()
-    server.run()
+def thread(ctx: typer.Context, limit: int = typer.Option(20, "--limit", "-l"),
+           as_json: bool = typer.Option(False, "--json", "-j")):
+    """Read bounded messages in the selected conversation."""
+    _run(ctx, "read_thread", limit=limit)
+
+
+@app.command()
+def send(ctx: typer.Context, to: str, message: str,
+         confirm: bool = typer.Option(False, "--confirm", help="Execute the exact user-approved message"),
+         as_json: bool = typer.Option(False, "--json", "-j")):
+    """Preview locally; --confirm submits to the matching selected thread."""
+    _run(ctx, "send_sms", recipient=to, text=message, confirm=confirm)
+
+
+@app.command()
+def serve(ctx: typer.Context):
+    """Start MCP over stdio."""
+    try:
+        client = GoogleVoiceClient(**ctx.obj)
+    except VoiceError as error:
+        raise ClickException(str(error)) from None
+    create_server(client).run(transport="stdio")
 
 
 if __name__ == "__main__":

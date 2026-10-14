@@ -1,0 +1,22 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: uv sync --locked --extra dev
+      - run: uv run pytest --cov=google_voice_mcp --cov-branch --cov-report=term-missing --cov-fail-under=100
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: uv build

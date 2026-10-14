@@ -4,19 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "google-voice-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Google Voice CLI & MCP server for SMS, call history, and voicemail automation"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Misha Lubich", email = "michaelle.lubich@gmail.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["google-voice", "sms", "voip", "mcp", "cli", "automation"]
 dependencies = [
-    "typer>=0.9.0",
+    "typer>=0.27,<0.28",
     "rich>=13.0.0",
-    "mcp>=1.0.0",
+    "mcp>=1.12,<2",
     "pydantic>=2.0.0",
-    "httpx>=0.24.0",
+    "own-chrome @ git+https://github.com/ml-lubich/own-chrome.git@66ffce63c2934bb7e76b5525dd60df3610a31d25",
 ]
 
 [project.optional-dependencies]
@@ -36,3 +36,15 @@ packages = ["src/google_voice_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.coverage.run]
+branch = true
+source = ["google_voice_mcp"]
+
+[tool.coverage.report]
+fail_under = 100
+precision = 2
+show_missing = true
