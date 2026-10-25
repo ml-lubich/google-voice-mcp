@@ -8,6 +8,7 @@ from typer.core import TyperGroup
 
 from google_voice_mcp.browser import VoiceError
 from google_voice_mcp.client import GoogleVoiceClient
+from google_voice_mcp.schema import build_schema
 from google_voice_mcp.server import create_server
 
 
@@ -22,6 +23,12 @@ class JsonGroup(TyperGroup):
 
 app = typer.Typer(cls=JsonGroup, help="Google Voice through existing Chrome. Output is JSON.",
                   context_settings={"help_option_names": ["-h", "--help"]})
+agent_app = typer.Typer(
+    help="Machine-readable command information for agent integrations.",
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+app.add_typer(agent_app, name="agent")
 
 
 @app.callback()
@@ -92,6 +99,12 @@ def serve(ctx: typer.Context):
     except VoiceError as error:
         raise ClickException(str(error)) from None
     create_server(client).run(transport="stdio")
+
+
+@agent_app.command("schema")
+def agent_schema():
+    """Print the complete CLI command schema as JSON."""
+    typer.echo(json.dumps(build_schema(app), ensure_ascii=False, separators=(",", ":")))
 
 
 if __name__ == "__main__":

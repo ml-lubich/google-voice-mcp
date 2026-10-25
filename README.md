@@ -19,6 +19,7 @@ Use the Chrome profile you have already signed into with remote debugging enable
 ```sh
 # Discover connection/account state without reading messages.
 gvoice doctor
+gvoice agent schema
 
 # Pin the expected account before any conversation read or confirmed send.
 export GOOGLE_VOICE_ACCOUNT='your-account@example.com'
@@ -62,6 +63,9 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm test
 uv build
 ```
+
+`gvoice agent schema` prints the machine-readable CLI command and option
+catalog, including the global account and browser connection options.
 
 Python tests exercise the client, browser boundary, CLI, and real MCP stdio protocol. JavaScript tests execute the browser adapter against synthetic DOM pages. No personal inbox or live send is needed in CI. The coverage gate applies to this package's Python runtime; JavaScript behavior is separately tested. Browser UI changes can require selector updates. Live verification evidence and limits belong in the setup document.
 

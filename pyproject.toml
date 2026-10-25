@@ -4,11 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "google-voice-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Google Voice CLI & MCP server for SMS, call history, and voicemail automation"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "Misha Lubich", email = "michaelle.lubich@gmail.com" }]
 requires-python = ">=3.11"
 keywords = ["google-voice", "sms", "voip", "mcp", "cli", "automation"]
 dependencies = [

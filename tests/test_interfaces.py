@@ -75,6 +75,25 @@ async def test_mcp_tools_and_strict_arguments(monkeypatch):
     assert server.create_server() is not None
 
 
+@pytest.mark.asyncio
+async def test_schema_commands_map_to_mcp_tools():
+    from google_voice_mcp.schema import build_schema
+
+    schema = build_schema(cli.app)
+    commands = {command["name"] for command in schema["commands"]}
+    server_tools = {tool.name for tool in await server.create_server().list_tools()}
+    mapping = {
+        "doctor": "doctor",
+        "sms": "list_sms",
+        "calls": "list_calls",
+        "voicemails": "list_voicemails",
+        "thread": "read_thread",
+        "send": "send_sms",
+    }
+    assert set(mapping) <= commands
+    assert set(mapping.values()) == server_tools
+
+
 def test_module_entrypoints(monkeypatch):
     # Execute actual module guards, replacing only their terminal/stdio runners.
     import typer
